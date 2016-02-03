@@ -1,0 +1,452 @@
+<!-- Created by sunil.jhamnani on 1/20/16.-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="stylesheets/bootstrap.min.css">
+    <script src="lib/jquery-2.2.0.min.js"></script>
+    <script src="lib/underscore-1.8.3.js"></script>
+    <script src="lib/backbone-1.2.3-min.js"></script>
+    <script src="lib/jquery.cookie.js"></script>
+</head>
+<style type="text/css">
+    div.auth {margin: 50px auto;line-height: 14.0px; font: 25px Times; color: #0000ee; -webkit-text-stroke: #0000ee;text-align: center;}
+    div.page_header {color: #000000; -webkit-text-stroke: #000000;text-align: center;font-size: -webkit-xxx-large;
+        margin-top: 150px;}
+    span.userlogin, span.adminlogin {font-kerning: none;padding: 0px 15px 0px 15px;}
+    form {
+        padding-top: 50px;
+    }
+    .form-group {
+        flex-grow: 1;
+        padding-left: 10px;
+        margin-bottom: 15px;
+    }
+
+    .form-row {
+        margin-left: -10px;
+    }
+    .edit_user{
+        pointer-events: none;
+    }   
+    .edit_admin{
+        pointer-events: auto;
+    }
+    #formLogin{
+        display: none;
+    }
+    h1{
+        text-align: center;
+    }
+</style>
+<body>
+<div class="page_header">
+    <span>Contact Mangement System</span>
+</div>
+<div id="logout" style="float: right;margin-right: 200px"><a href="/logout">Logout</a></div>
+<div id="editContact">
+
+</div>
+<form id="addContact" class="form-horizontal" style="text-align: center;display:none">
+	<h1>Add Contact</h1>
+	<div class="form-group">
+		<input type="text" id="name" name="name" placeholder="Full name" class="form-element">
+	</div>
+
+	<div class="form-group">
+		<input type="email" id="email_address" name="email_address" placeholder="Email" class="form-element">
+	</div>
+
+	<div class="form-group">
+		<input type="text" id="phone" name="phone" placeholder="Mobile" class="form-element">
+	</div>
+	<div class="form-group">
+		<input type="text" id="skypeid" name="skypeid" placeholder="Skype ID" class="form-element"></input>
+	</div>
+	<div >
+		<input type="submit" value="Add Contact" class="btn btn-primary" style="margin-top:5px">
+	</div>
+</form>
+<table id="allContacts" class="table table-hover" style="margin: 50px auto;table-layout: fixed;width: 900px;">
+    <thead style="background-color: burlywood;">
+    <tr>
+        <td width="25%">Name</td>
+        <td width="30%">Email</td>
+        <td width="25%">Phone</td>
+        <td width="20%">Skype ID</td>
+        <td width="25%">Configure</td>
+    </tr>
+    </thead>
+</table>
+<form id="formLogin" method="POST">
+    <div class="form-row">
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="text" id="email" class="form-control" name="email" placeholder="Your Email">
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" class="form-control" name="password" placeholder="Password"></textarea>
+        </div>
+    </div>
+
+    <input type="submit" value="Login">
+</form>
+<script>
+    (function() {
+        window.App = {
+            Models: {},
+            Collections: {},
+            Views: {},
+            Router: {}
+        };
+
+        window.vent = _.extend({}, Backbone.Events);
+
+        window.template = function(id) {
+            return _.template( $('#' + id).html() );
+        };
+    })();
+</script>
+<script src="lib/models.js"></script>
+<script src="lib/collections.js"></script>
+<script>
+
+    $(function () {
+        App.Router.IndexRouter = Backbone.Router.extend({
+            routes: {
+                '': 'index'
+            },
+
+            index: function() {
+              getAllContacts();
+            }
+            
+        });
+
+        App.Router.LoginRouter = Backbone.Router.extend({
+            routes: {
+                "login":"login"
+            },
+            login: function(){
+                    App.indexView = new App.Views.IndexView;
+                    App.loginView = new App.Views.LoginFormView({model:new App.Models.Login});
+                    $('#logout').hide();
+                    $(document.body).append(App.indexView.render().el);
+            }
+        });
+        
+        App.Router.AdminRouter = Backbone.Router.extend({
+            routes: {
+                'admin': 'admin'
+            },
+            
+            admin: function(){
+                getAllContacts();
+                $('#addContact').css('display','block');
+                
+            }
+        });
+        /*
+         |--------------------------------------------------------------------------
+         | Global App View
+         |--------------------------------------------------------------------------
+         */
+        App.Views.App = Backbone.View.extend({
+            initialize: function() {
+                $("#editContact").hide();
+		        vent.on('contact:edit', this.editContact, this);
+                var addContactView = new App.Views.AddContact({ collection: App.contactsCollection });
+                var allContactsView = new App.Views.Contacts({ collection: App.contactsCollection });
+                $("#allContacts").show();
+                $("#allContacts").append(allContactsView.render().el);
+                if(!App.isAdmin){
+                    $('#allContacts td:last-child').css('display','none');
+                }
+                else{
+                    $('#allContacts td:last-child').css('display','table-cell');
+                }
+            },
+
+            editContact: function(contact) {
+                var editContactView = new App.Views.EditContact({ model: contact });
+                $('#editContact').html(editContactView.el);
+            }
+        });
+        
+        App.Views.EditContact = Backbone.View.extend({
+            template: template('editContactTemplate'),
+
+            initialize: function() {
+                this.render();
+
+                this.form = this.$('form');
+                this.name = this.form.find('#edit_name');
+                this.email = this.form.find('#edit_email');
+                this.phone = this.form.find('#edit_phone');
+                this.skypeid = this.form.find('#edit_skypeid');
+            },
+
+            events: {
+                'submit form': 'submit',
+                'click button.cancel': 'cancel'
+            },
+
+            submit: function(e) {
+                e.preventDefault();
+
+                this.model.save({
+                    name: this.name.val(),
+                    email: this.email.val(),
+                    phone: this.phone.val(),
+                    skypeid: this.skypeid.val()
+                });
+
+                this.remove();
+                $("#editContact").hide();
+                $("#addContact").show();
+            },
+
+            cancel: function() {
+                this.remove();
+                $("#editContact").hide();
+                $("#addContact").show();		
+            },
+
+            render: function() {
+                var html = this.template( this.model.toJSON() );
+
+                this.$el.html(html);
+                return this;
+            }
+        });
+        
+        App.Views.IndexView = Backbone.View.extend({
+            tagName: 'div',
+            className: 'auth',
+            initialize: function(){
+                $('#allContacts').hide();
+                $('#formLogin').hide();
+                this.render();
+            },
+            events: {
+                'click .userlogin': 'userloginEvent',
+                'click .adminlogin': 'adminloginEvent'
+            },
+
+            render: function(){
+                this.$el.html('<button type="button" class="userlogin">User Login</button> ' +
+                        '<button type="button" class="adminlogin">Admin Login</button>');
+                return this;
+            },
+            userloginEvent: function(){
+                $('#formLogin').css('marginLeft','300px');
+                $('#formLogin').show();
+            },
+
+            adminloginEvent: function(){
+                $('#formLogin').css('marginLeft','800px');
+                $('#formLogin').show();
+            }
+        });
+
+        /*  
+        |--------------------------------------------------------------------------
+        | All Contacts View
+        |--------------------------------------------------------------------------
+        */
+        App.Views.Contacts = Backbone.View.extend({
+            tagName: 'tbody',
+
+            initialize: function() {
+                this.collection.on('add', this.addOne, this);
+            },
+
+            render: function() {
+                this.collection.each( this.addOne, this );
+                return this;
+            },
+
+            addOne: function(contact) {
+                var contactView = new App.Views.Contact({ model: contact });
+                this.$el.append(contactView.render().el);
+            }
+        });
+
+
+        /*
+         |--------------------------------------------------------------------------
+         | Single Contact View
+         |--------------------------------------------------------------------------
+         */
+        App.Views.Contact = Backbone.View.extend({
+            tagName: 'tr',
+
+            template: template('allContactsTemplate'),
+
+            initialize: function() {
+                this.model.on('destroy', this.unrender, this);
+                this.model.on('change', this.render, this);
+            },
+
+            events: {
+                'click a.delete': 'deleteContact',
+                'click a.edit'  : 'editContact'
+            },
+
+            editContact: function() {
+                vent.trigger('contact:edit', this.model);
+                $("#addContact").hide();
+                $("#editContact").show();
+            },
+
+            deleteContact: function() {
+                this.model.destroy();
+                App.adminRouter.navigate('admin',{trigger:true});
+            },
+
+            render: function() {
+                this.$el.html( this.template( this.model.toJSON() ) );
+                return this;
+            },
+
+            unrender: function() {
+                this.remove();
+            }
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Add Contact View
+        |--------------------------------------------------------------------------
+        */
+        App.Views.AddContact = Backbone.View.extend({
+            el: '#addContact',
+
+            initialize: function() {
+                this.name = $('#name');
+                this.email = $('#email_address');
+                this.phone = $('#phone');
+                this.skypeid = $('#skypeid');
+            },
+
+            events: {
+                'submit': 'addContact'
+            },
+
+            addContact: function(e) {
+                e.preventDefault();
+
+                this.collection.create({
+                    name: this.name.val(),
+                    email: this.email.val(),
+                    phone: this.phone.val(),
+                    skypeid: this.skypeid.val()
+                }, { wait: true });
+                this.clearForm();
+            },
+
+            clearForm: function() {
+                this.name.val('');
+                this.email.val('');
+                this.phone.val('');
+                this.skypeid.val('');
+            }
+        });
+        
+        App.Views.LoginFormView = Backbone.View.extend({
+            el: '#formLogin',
+
+            initialize: function() {
+                this.email = $('#email');
+                this.password = $('#password');
+            },
+
+            events: {
+                'submit': 'login'
+            },
+
+            login: function(e) {
+                e.preventDefault();
+
+                this.model.save({
+                    email: this.email.val(),
+                    password: this.password.val(),
+                },{
+                    success: function(resp, xhr) {
+                        $('#formLogin').hide();
+                        $('div.auth').hide();
+                        var Cookiesid = xhr._id;
+                        if (xhr.isAdmin){
+                            App.isAdmin = true;
+                            App.adminRouter.navigate('admin',{trigger:true});
+                        }
+                        else{
+                            App.indexRouter.navigate('/',{trigger:true})    
+                        }
+                    },
+                    error: function(){
+
+                    }
+                });
+            },
+
+        });
+        
+        App.isAdmin = false;
+        App.indexRouter = new App.Router.IndexRouter;
+        App.loginRouter = new App.Router.LoginRouter;
+        App.adminRouter = new App.Router.AdminRouter;
+        Backbone.history.start({pushState:true});
+    });
+   function getAllContacts(){
+        App.contactsCollection = new App.Collections.Contacts;
+        App.contactsCollection.fetch({
+        success: function(collection, response, options){
+           
+        },
+        error: function(collection, response, options){
+            App.loginRouter.navigate('login',{trigger:true})
+        }
+    }).then(function(err){
+                new App.Views.App({ collection: App.contactsCollection });
+        });
+        $('#logout').show();
+    }
+</script>
+<script id="allContactsTemplate" type="text/template">
+    <td><%= name %></td>
+    <td><%= email %></td>
+    <td><%= phone %></td>
+    <td><%= skypeid %></td>
+    <td><a href="#contacts/<%= _id %>/edit" class="edit btn">Edit</a><a style="float: right;" href="#contacts/<%= _id %>" class="delete btn">Delete</a></td>
+</script>
+<script id="editContactTemplate" type="text/template">
+	<form id="editContactForm" class="form-horizontal" style="margin-left: 500px;">
+		<div>
+			<label for="edit_name">Full Name: </label>
+			<input type="text" id="edit_name" name="edit_name" value="<%= name %>">
+		</div>
+
+		<div>
+			<label for="edit_email">Email</label>
+			<input type="text" id="edit_email" name="edit_email" value="<%= email %>">
+		</div>
+
+		<div>
+			<label for="edit_phone">Mobile:</label>
+			<input type="text" id="edit_phone" name="edit_phone" value="<%= phone %>">
+		</div>
+		<div>
+			<label for="edit_skypeid">Skype ID:</label>
+			<input type="text" id="edit_skypeid" name="edit_skypeid" value="<%= skypeid %>">
+		</div>
+		<div style="padding: 10px 0px 0px 20px;">
+			<input type="submit" value="Edit Contact" class="btn btn-success">
+			<button type="button" class="cancel btn">Cancel</button>
+		</div>
+	</form>
+</script>
+</body>
+</html>
